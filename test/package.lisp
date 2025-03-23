@@ -4,7 +4,8 @@
    (#:vec #:coalton-library/vector)
    (#:result #:coalton-library/result))
   (:local-nicknames
-   (#:streams #:coalton-streams)))
+   (#:stream #:coalton-streams/stream)
+   (#:file #:coalton-streams/file)))
 (in-package #:coalton-streams/test)
 
 (fiasco:define-test-package #:coalton-streams/fiasco-test-package)
