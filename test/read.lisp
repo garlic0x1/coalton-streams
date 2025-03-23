@@ -1,11 +1,17 @@
 (in-package #:coalton-streams/test)
 
 (coalton-toplevel
-  (declare make-test-stream (String -> (stream:InputStream :elt)))
+  (declare make-test-stream (types:RuntimeRepr :elt => String -> (stream:InputStream :elt)))
   (define (make-test-stream str)
-    (lisp (stream:InputStream :elt) (str)
-      (flex:make-in-memory-input-stream
-       (flex:string-to-octets str)))))
+    (let prox = types:Proxy)
+    (let type = (types:runtime-repr (types:proxy-inner prox)))
+    (types:as-proxy-of 
+     (lisp (stream:InputStream :elt) (str type)
+       (flex:make-flexi-stream
+        (flex:make-in-memory-input-stream
+         (flex:string-to-octets str))
+        :element-type type))
+     prox)))
 
 (define-test test-read-u8-stream ()
   (let ((declare s (stream:InputStream U8))
@@ -15,3 +21,24 @@
     (is (== 108 (unwrap (stream:peek s))))
     (is (== (vec:make 108 111) (unwrap (stream:read-sequence s 2))))
     (is (result:err? (stream:read s)))))
+
+(define-test test-read-char-stream ()
+  (let ((declare s (stream:InputStream Char))
+        (s (make-test-stream "Hello")))
+    (is (== #\H (unwrap (stream:read s))))
+    (is (== (vec:make #\e #\l) (unwrap (stream:read-sequence s 2))))
+    (is (== #\l (unwrap (stream:peek s))))
+    (is (== (vec:make #\l #\o) (unwrap (stream:read-sequence s 2))))
+    (is (result:err? (stream:read s)))))
+
+(define-test test-read-token-stream ()
+  (let ((declare s (stream:InputStream Char))
+        (s (make-test-stream "Hello world
+I love Coalton!")))
+    (is (== "Hello" (into (stream:read-word s))))
+    (let ((line (into (stream:read-line s))))
+      (lisp Unit (line) 
+        (cl:print line)
+        Unit) 
+      (is (== " world
+" line)))))

@@ -2,6 +2,7 @@
   (:use #:coalton #:coalton-prelude #:coalton-testing)
   (:local-nicknames
    (#:vec #:coalton-library/vector)
+   (#:types #:coalton-library/types)
    (#:result #:coalton-library/result))
   (:local-nicknames
    (#:stream #:coalton-streams/stream)
