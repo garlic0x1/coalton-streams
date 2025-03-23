@@ -3,6 +3,7 @@
   (:import-from #:coalton-library/system #:LispCondition)
   (:local-nicknames
    (#:types #:coalton-library/types)
+   (#:seq #:coalton-library/seq)
    (#:vec #:coalton-library/vector))
   (:local-nicknames
    (#:util #:coalton-streams/util)
@@ -10,7 +11,10 @@
    (#:token #:coalton-streams/token))
   (:export
    #:with-input-file
-   #:with-output-file))
+   #:with-output-file
+   #:with-io-file
+   #:read-file-string
+   #:read-file-lines))
 (in-package #:coalton-streams/file)
 (named-readtables:in-readtable coalton:coalton)
 
@@ -48,12 +52,13 @@
       (fn (stream)
         (into (the (Vector Char) (stream:read-all stream))))))
 
-  (declare read-file-lines (String -> (Result LispCondition (Vector String))))
+  (declare read-file-lines (String -> (Result LispCondition (seq:Seq String))))
   (define (read-file-lines path)
     (with-input-file path
-      (fn (stream)
-        (rec f ((lines (vec:new)))
-          (let ((line (into (the (Vector Char) (stream:read-line stream)))))
-            (if (mempty? line)
-                lines
-                (f (progn (vec:push! line lines) lines)))))))))
+      (fn (stream) (the (stream:InputStream Char) stream)
+        (rec f ((lines (seq:new)))
+          (match (stream:read-line stream)
+            ((Err (stream:EOF partial))
+             (seq:push lines (into partial)))
+            ((Ok line)
+             (f (seq:push lines (into line))))))))))

@@ -35,10 +35,9 @@
   (let ((declare s (stream:InputStream Char))
         (s (make-test-stream "Hello world
 I love Coalton!")))
-    (is (== "Hello" (into (stream:read-word s))))
-    (let ((line (into (stream:read-line s))))
-      (lisp Unit (line) 
-        (cl:print line)
-        Unit) 
-      (is (== " world
-" line)))))
+    (is (== "Hello" (into (unwrap (stream:read-word s)))))
+    (is (== " world" (into (unwrap (stream:read-line s)))))
+    (let partial = (stream:read-line s))
+    (matches (Err (stream:EOF _)) partial)
+    (match partial
+      ((Err (stream:EOF vec)) (is (== "I love Coalton!" (into vec)))))))

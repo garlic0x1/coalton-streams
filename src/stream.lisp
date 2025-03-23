@@ -7,28 +7,15 @@
    (#:util #:coalton-streams/util)
    (#:token #:coalton-streams/token))
   (:export
-   #:Readable
-   #:Writable
-   #:Closable
-   #:InputStream
-   #:OutputStream
-   #:IOStream
-   #:read
-   #:read-sequence
-   #:unread
-   #:peek
-   #:write
-   #:write-sequence
+   #:InputStream #:OutputStream #:IOStream
+   #:Readable #:Writable #:Closable
+   #:read #:read-sequence #:unread #:peek
+   #:write #:write-sequence
    #:close
-   #:Inclusive
-   #:Exclusive
-   #:InclusiveGreedy
-   #:ExclusiveGreedy
-   #:drop-to
-   #:read-to
-   #:read-word
-   #:read-line
-   #:read-all))
+   #:ReaderErr #:EOF
+   #:ReaderPredicate #:Inclusive #:Exclusive
+   #:drop-to #:read-to
+   #:read-word #:read-line #:read-all))
 (in-package #:coalton-streams/stream)
 (named-readtables:in-readtable coalton:coalton)
 
@@ -117,13 +104,14 @@
         (cl:write-sequence vec stream)))))
 
 (coalton-toplevel
-  (define-type (ReaderPredicate :elt)
-    (Inclusive       (:elt -> Boolean))
-    (Exclusive       (:elt -> Boolean))
-    (InclusiveGreedy (:elt -> Boolean))
-    (ExclusiveGreedy (:elt -> Boolean)))
+  (define-type (ReaderErr :elt)
+    (EOF (Vector :elt)))
 
-  (declare read-to ((Readable :stream :elt) => :stream :elt -> ReaderPredicate :elt -> (Result LispCondition (Vector :elt))))
+  (define-type (ReaderPredicate :elt)
+    (Inclusive (:elt -> Boolean))
+    (Exclusive (:elt -> Boolean)))
+
+  (declare read-to ((Readable :stream :elt) => :stream :elt -> ReaderPredicate :elt -> (Result (ReaderErr :elt) (Vector :elt))))
   (define (read-to stream pred)
     (let vec = (vec:make))
     (while-let (Ok elt) = (read stream)
@@ -131,53 +119,37 @@
         ((Inclusive f)
          (progn (vec:push! elt vec) Unit)
          (when (f elt) (return (Ok vec))))
-        ((InclusiveGreedy f)
-         (progn (vec:push! elt vec) Unit)
-         (when (f elt) (return (Ok vec))))
         ((Exclusive f)
          (if (f elt)
              (progn (unread stream elt) (return (Ok vec)))
-             (progn (vec:push! elt vec) Unit)))
-        ((ExclusiveGreedy f)
-         (if (f elt)
-             (progn (unread stream elt) (return (Ok vec)))
              (progn (vec:push! elt vec) Unit)))))
-    (match pred
-      ((InclusiveGreedy _) (Ok vec))
-      ((ExclusiveGreedy _) (Ok vec))
-      (_ (Err (lisp LispCondition () (cl:make-instance 'cl:end-of-file))))))
+    (Err (EOF vec)))
 
-  (declare drop-to ((Readable :stream :elt) => :stream :elt -> ReaderPredicate :elt -> (Result LispCondition (:stream :elt))))
+  (declare drop-to ((Readable :stream :elt) => :stream :elt -> ReaderPredicate :elt -> (Result (ReaderErr :elt) (:stream :elt))))
   (define (drop-to stream pred)
     (while-let (Ok elt) = (read stream)
       (match pred
         ((Inclusive f)
          (when (f elt)
            (return (Ok stream))))
-        ((InclusiveGreedy f)
-         (when (f elt)
-           (return (Ok stream))))
         ((Exclusive f)
          (when (f elt)
            (unread stream elt)
-           (return (Ok stream))))
-        ((ExclusiveGreedy f)
-         (when (f elt)
-           (unread stream elt)
            (return (Ok stream))))))
-    (match pred
-      ((InclusiveGreedy _) (Ok stream))
-      ((ExclusiveGreedy _) (Ok stream)) 
-      (_ (Err (lisp LispCondition () (cl:make-instance 'cl:end-of-file))))))
+    (Err (EOF (vec:make))))
 
-  (declare read-word ((Readable :stream :elt) (token:Whitespace :elt) => :stream :elt -> (Vector :elt)))
+  (declare read-word ((Readable :stream :elt) (token:Whitespace :elt) => :stream :elt -> (Result (ReaderErr :elt) (Vector :elt))))
   (define (read-word stream)
-    (unwrap (read-to stream (ExclusiveGreedy token:whitespace?))))
+    (drop-to stream (Exclusive (fn (elt) (not (token:whitespace? elt)))))
+    (read-to stream (Exclusive token:whitespace?)))
 
-  (declare read-line ((Readable :stream :elt) (token:Newline :elt) => :stream :elt -> (Vector :elt)))
+  (declare read-line ((Readable :stream :elt) (token:Newline :elt) => :stream :elt -> (Result (ReaderErr :elt) (Vector :elt))))
   (define (read-line stream)
-    (unwrap (read-to stream (InclusiveGreedy token:newline?))))
+    (drop-to stream (Exclusive (fn (elt) (not (token:newline? elt)))))
+    (read-to stream (Exclusive token:newline?)))
 
   (declare read-all ((Readable :stream :elt) => :stream :elt -> (Vector :elt)))
   (define (read-all stream)
-    (unwrap (read-to stream (InclusiveGreedy (fn (_) False))))))
+    (match (read-to stream (Inclusive (fn (_) False)))
+      ((Ok result) result)
+      ((Err (EOF result)) result))))
