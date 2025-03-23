@@ -145,7 +145,9 @@
 
   (declare read-line ((Readable :stream :elt) (token:Newline :elt) => :stream :elt -> (Result (ReaderErr :elt) (Vector :elt))))
   (define (read-line stream)
-    (drop-to stream (Exclusive (fn (elt) (not (token:newline? elt)))))
+    (match (peek stream)
+      ((Ok elt) (when (token:newline? elt) (read stream) Unit))
+      ((Err _) (return (Err (EOF mempty)))))
     (read-to stream (Exclusive token:newline?)))
 
   (declare read-all ((Readable :stream :elt) => :stream :elt -> (Vector :elt)))
