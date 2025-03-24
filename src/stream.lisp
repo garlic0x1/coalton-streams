@@ -10,8 +10,8 @@
    #:InputStream #:OutputStream #:IOStream
    #:Readable #:Writable #:Closable
    #:read #:read-sequence #:unread #:peek
-   #:write #:write-sequence
-   #:close
+   #:write #:write-sequence #:flush
+   #:close #:abort
    #:ReaderErr #:EOF
    #:ReaderPredicate #:Inclusive #:Exclusive
    #:drop-to #:read-to
@@ -34,7 +34,8 @@
 
   (define-class (Closable :stream :elt)
     "A stream that can be closed."
-    (close          (:stream :elt -> (Result LispCondition Unit))))
+    (close          (:stream :elt -> Unit))
+    (abort          (:stream :elt -> Unit)))
 
   (define-class (Readable :stream :elt)
     "An input or IO stream."
@@ -45,15 +46,19 @@
 
   (define-class (Writable :stream :elt)
     "An output or IO stream."
-    (write          (:stream :elt -> :elt -> (Result LispCondition Unit)))
-    (write-sequence (:stream :elt -> Vector :elt -> (Result LispCondition Unit)))))
+    (write          (:stream :elt -> :elt -> Unit))
+    (write-sequence (:stream :elt -> Vector :elt -> Unit))
+    (flush          (:stream :elt -> Unit))))
 
 (coalton-toplevel
   (util:define-instances (Closable (InputStream Char) (OutputStream Char) (IOStream Char)
-                              (InputStream U8) (OutputStream U8) (IOStream U8))
+                                   (InputStream U8) (OutputStream U8) (IOStream U8))
     (define (close stream)
-      (util:lisp-result Unit (stream)
-        (cl:close stream))))
+      (lisp Unit (stream)
+        (cl:close stream)))
+    (define (abort stream)
+      (lisp Unit (stream)
+        (cl:close stream :abort cl:t))))
 
   (util:define-instances (Readable (InputStream Char) (IOStream Char))
     (define (read stream)
@@ -73,11 +78,17 @@
         (cl:peek-char nil stream))))
   (util:define-instances (Writable (OutputStream Char) (IOStream Char))
     (define (write stream elt)
-      (util:lisp-result Unit (stream elt)
-        (cl:write-char elt stream)))
+      (lisp Unit (stream elt)
+        (cl:write-char elt stream)
+        Unit))
     (define (write-sequence stream vec)
-      (util:lisp-result Unit (stream vec)
-        (cl:write-sequence vec stream))))
+      (lisp Unit (stream vec)
+        (cl:write-sequence vec stream)
+        Unit))
+    (define (flush stream)
+      (lisp Unit (stream)
+        (cl:finish-output stream)
+        Unit)))
 
   (util:define-instances (Readable (InputStream U8) (IOStream U8))
     (define (read stream)
@@ -97,11 +108,17 @@
         (flex:peek-byte stream))))
   (util:define-instances (Writable (OutputStream U8) (IOStream U8))
     (define (write stream elt)
-      (util:lisp-result Unit (stream elt)
-        (cl:write-byte elt stream)))
+      (lisp Unit (stream elt)
+        (cl:write-byte elt stream)
+        Unit))
     (define (write-sequence stream vec)
-      (util:lisp-result Unit (stream vec)
-        (cl:write-sequence vec stream)))))
+      (lisp Unit (stream vec)
+        (cl:write-sequence vec stream)
+        Unit))
+    (define (flush stream)
+      (lisp Unit (stream)
+        (cl:finish-output stream)
+        Unit))))
 
 (coalton-toplevel
   (define-type (ReaderErr :elt)
