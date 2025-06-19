@@ -12,12 +12,32 @@
   (:export
    #:IfExists #:EError #:Overwrite #:Append #:Supersede #:Rename
    #:IfDoesNotExist #:DNEError #:Create
+   #:open-input-file* #:open-output-file* #:open-io-file*
+   #:open-input-file #:open-output-file #:open-io-file
+   #:with-input-file* #:with-output-file* #:with-io-file*
    #:with-input-file #:with-output-file #:with-io-file
    #:read-file-string #:read-file-lines))
 (in-package #:coalton-streams/file)
 (named-readtables:in-readtable coalton:coalton)
 
 (cl:eval-when (:compile-toplevel :load-toplevel :execute)
+  (cl:defmacro %open-file (path if-exists if-does-not-exist cl:&rest opts)
+    `(progn
+       (let if-exists = (symbolize ,if-exists))
+       (let if-does-not-exist = (symbolize ,if-does-not-exist))
+       (let prox = types:Proxy)
+       (let type = (types:runtime-repr (types:proxy-inner (types:proxy-inner prox))))
+       (types:as-proxy-of
+        (util:lisp-result :result (,path if-exists if-does-not-exist type)
+          (flex:make-flexi-stream 
+           (cl:open ,path
+                    :element-type '(cl:unsigned-byte 8)
+                    :if-exists if-exists
+                    :if-does-not-exist if-does-not-exist
+                    ,@opts)
+           :element-type type))
+        prox)))
+
   (cl:defmacro %with-file (path fn if-exists if-does-not-exist cl:&rest opts)
     `(progn
        (let if-exists = (symbolize ,if-exists))
@@ -69,6 +89,31 @@
       (match obj
         ((DNEError) (lisp Symbol () ':error))
         ((Create)   (lisp Symbol () ':create))))))
+
+(coalton-toplevel
+  (declare open-input-file* ((types:RuntimeRepr :elt) => String -> IfDoesNotExist -> (Result LispCondition (stream:InputStream :elt))))
+  (define (open-input-file* path if-does-not-exist)
+    (%open-file path Append if-does-not-exist :direction ':input))
+
+  (declare open-input-file ((types:RuntimeRepr :elt) => String -> (Result LispCondition (stream:InputStream :elt))))
+  (define (open-input-file path)
+    (%open-file path Append DNEError :direction ':input))
+
+  (declare open-output-file* ((types:RuntimeRepr :elt) => String -> IfExists -> IfDoesNotExist -> (Result LispCondition (stream:OutputStream :elt))))
+  (define (open-output-file* path if-exists if-does-not-exist)
+    (%open-file path if-exists if-does-not-exist :direction ':input))
+
+  (declare open-output-file ((types:RuntimeRepr :elt) => String -> (Result LispCondition (stream:OutputStream :elt))))
+  (define (open-output-file path)
+    (%open-file path Append DNEError :direction ':output))
+
+  (declare open-io-file* ((types:RuntimeRepr :elt) => String -> IfExists -> IfDoesNotExist -> (Result LispCondition (stream:IOStream :elt))))
+  (define (open-io-file* path if-exists if-does-not-exist)
+    (%open-file path if-exists if-does-not-exist :direction ':io))
+
+  (declare open-io-file ((types:RuntimeRepr :elt) => String -> (Result LispCondition (stream:IOStream :elt))))
+  (define (open-io-file path)
+    (%open-file path Append DNEError :direction ':io)))
 
 (coalton-toplevel
   (declare with-input-file* ((types:RuntimeRepr :elt) => String -> IfDoesNotExist -> (stream:InputStream :elt -> :result) -> (Result LispCondition :result)))
