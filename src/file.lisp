@@ -8,42 +8,103 @@
   (:local-nicknames
    (#:util #:coalton-streams/util)
    (#:stream #:coalton-streams/stream))
+  (:shadow :append)
   (:export
-   #:with-input-file
-   #:with-output-file
-   #:with-io-file
-   #:read-file-string
-   #:read-file-lines))
+   #:IfExists #:EError #:Overwrite #:Append #:Supersede #:Rename
+   #:IfDoesNotExist #:DNEError #:Create
+   #:with-input-file #:with-output-file #:with-io-file
+   #:read-file-string #:read-file-lines))
 (in-package #:coalton-streams/file)
 (named-readtables:in-readtable coalton:coalton)
 
 (cl:eval-when (:compile-toplevel :load-toplevel :execute)
-  (cl:defmacro %with-file (path fn cl:&rest opts)
+  (cl:defmacro %with-file (path fn if-exists if-does-not-exist cl:&rest opts)
     `(progn
+       (let if-exists = (symbolize ,if-exists))
+       (let if-does-not-exist = (symbolize ,if-does-not-exist))
        (let prox = types:Proxy)
        (let _ = (types:as-proxy-of ,fn prox))
        (let ((declare proxy-fst (types:Proxy (:a -> :b) -> types:Proxy :a))
              (proxy-fst (fn (_) types:Proxy))
              (type (types:runtime-repr (types:proxy-inner (proxy-fst prox)))))
-         (util:lisp-result :result (,path ,fn type)
-           (cl:with-open-file (stream ,path :element-type '(cl:unsigned-byte 8) ,@opts)
+         (util:lisp-result :result (,path ,fn if-exists if-does-not-exist type)
+           (cl:with-open-file (stream ,path
+                                      :element-type '(cl:unsigned-byte 8)
+                                      :if-exists if-exists
+                                      :if-does-not-exist if-does-not-exist
+                                      ,@opts)
              (call-coalton-function ,fn (flex:make-flexi-stream stream :element-type type))))))))
 
 (coalton-toplevel
+  (repr :native cl:symbol)
+  (define-type Symbol)
+
+  (define-class (Symbolic :t)
+    (symbolize (:t -> Symbol)))
+
+  (repr :enum)
+  (define-type IfExists
+    EError
+    Overwrite
+    Append
+    Supersede
+    Rename)
+
+  (define-instance (Symbolic IfExists)
+    (define (symbolize obj)
+      (match obj
+        ((EError)    (lisp Symbol () ':error))
+        ((Overwrite) (lisp Symbol () ':overwrite))
+        ((Append)    (lisp Symbol () ':append))
+        ((Supersede) (lisp Symbol () ':supersede))
+        ((Rename)    (lisp Symbol () ':rename)))))
+
+  (repr :enum)
+  (define-type IfDoesNotExist
+    DNEError
+    Create)
+
+  (define-instance (Symbolic IfDoesNotExist)
+    (define (symbolize obj)
+      (match obj
+        ((DNEError) (lisp Symbol () ':error))
+        ((Create)   (lisp Symbol () ':create))))))
+
+(coalton-toplevel
+  (declare with-input-file* ((types:RuntimeRepr :elt) => String -> IfDoesNotExist -> (stream:InputStream :elt -> :result) -> (Result LispCondition :result)))
+  (define (with-input-file* path if-does-not-exist fn)
+    "Call `fn' with file at `path' open to read."
+    (%with-file path fn Append if-does-not-exist :direction ':input))
+
   (declare with-input-file ((types:RuntimeRepr :elt) => String -> (stream:InputStream :elt -> :result) -> (Result LispCondition :result)))
   (define (with-input-file path fn)
-    "Call `fn' with file at `path' open to read."
-    (%with-file path fn :direction :input))
+    "Call `fn' with file at `path' open to read.
+Results in an error if the file does not exist."
+    (%with-file path fn Append DNEError :direction ':input))
+
+  (declare with-output-file* ((types:RuntimeRepr :elt) => String -> IfExists -> IfDoesNotExist -> (stream:OutputStream :elt -> :result) -> (Result LispCondition :result)))
+  (define (with-output-file* path if-exists if-does-not-exist fn)
+    "Call `fn' with file at `path' open to write."
+    (%with-file path fn if-exists if-does-not-exist :direction ':output))
 
   (declare with-output-file ((types:RuntimeRepr :elt) => String -> (stream:OutputStream :elt -> :result) -> (Result LispCondition :result)))
   (define (with-output-file path fn)
-    "Call `fn' with file at `path' open to write."
-    (%with-file path fn :direction :output :if-exists :append))
+    "Call `fn' with file at `path' open to write.
+Creates the file if it does not exist.
+Appends to the file if it exists."
+    (%with-file path fn Append Create :direction ':output))
+
+  (declare with-io-file* ((types:RuntimeRepr :elt) => String -> IfExists -> IfDoesNotExist -> (stream:IOStream :elt -> :result) -> (Result LispCondition :result)))
+  (define (with-io-file* path if-exists if-does-not-exist fn)
+    "Call `fn' with file at `path' open to read and write."
+    (%with-file path fn if-exists if-does-not-exist :direction ':io))
 
   (declare with-io-file ((types:RuntimeRepr :elt) => String -> (stream:IOStream :elt -> :result) -> (Result LispCondition :result)))
   (define (with-io-file path fn)
-    "Call `fn' with file at `path' open to read and write."
-    (%with-file path fn :direction :io :if-exists :append)))
+    "Call `fn' with file at `path' open to read and write.
+Creates the file if it does not exist.
+Appends to the file if it exists."
+    (%with-file path fn Append Create :direction ':io)))
 
 (coalton-toplevel
   (declare read-file-string (String -> (Result LispCondition String)))
