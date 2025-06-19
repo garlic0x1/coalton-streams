@@ -15,7 +15,8 @@
    #:ReaderErr #:EOF
    #:ReaderPredicate #:Inclusive #:Exclusive
    #:drop-to #:read-to
-   #:read-word #:read-line #:read-all))
+   #:read-word #:read-line #:read-all
+   #:stdout #:stderr #:stdin))
 (in-package #:coalton-streams/stream)
 (named-readtables:in-readtable coalton:coalton)
 
@@ -168,3 +169,22 @@
     (match (read-to stream (Inclusive (fn (_) False)))
       ((Ok result) result)
       ((Err (EOF result)) result))))
+
+(coalton-toplevel
+  (declare stdout (Unit -> OutputStream :elt))
+  (define (stdout)
+    "Equivalent to `cl:*standard-output*'."
+    (lisp (OutputStream :elt) ()
+      (flex:make-flexi-stream cl:*standard-output*)))
+
+  (declare stderr (Unit -> OutputStream :elt))
+  (define (stderr)
+    "Equivalent to `cl:*error-output*'."
+    (lisp (OutputStream :elt) ()
+      (flex:make-flexi-stream cl:*error-output*)))
+
+  (declare stdin (Unit -> InputStream :elt))
+  (define (stdin)
+    "Equivalent to `cl:*standard-input*'."
+    (lisp (InputStream :elt) ()
+      (flex:make-flexi-stream cl:*standard-input*))))
