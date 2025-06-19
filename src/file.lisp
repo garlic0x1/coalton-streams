@@ -16,6 +16,7 @@
    #:open-input-file #:open-output-file #:open-io-file
    #:with-input-file* #:with-output-file* #:with-io-file*
    #:with-input-file #:with-output-file #:with-io-file
+   #:touch
    #:read-file-string #:read-file-lines))
 (in-package #:coalton-streams/file)
 (named-readtables:in-readtable coalton:coalton)
@@ -152,6 +153,15 @@ Appends to the file if it exists."
     (%with-file path fn Append Create :direction ':io)))
 
 (coalton-toplevel
+  (declare touch (String -> (Result LispCondition Unit)))
+  (define (touch path)
+    (match (%open-file path Append Create :direction ':output)
+      ((Ok stream)
+       (stream:close (the (stream:OutputStream U8) stream))
+       (Ok Unit))
+      ((Err condition)
+       (Err condition))))
+
   (declare read-file-string (String -> (Result LispCondition String)))
   (define (read-file-string path)
     (with-input-file path
