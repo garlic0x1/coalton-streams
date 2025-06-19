@@ -7,8 +7,7 @@
    (#:vec #:coalton-library/vector))
   (:local-nicknames
    (#:util #:coalton-streams/util)
-   (#:stream #:coalton-streams/stream)
-   (#:token #:coalton-streams/token))
+   (#:stream #:coalton-streams/stream))
   (:export
    #:with-input-file
    #:with-output-file
@@ -18,16 +17,17 @@
 (in-package #:coalton-streams/file)
 (named-readtables:in-readtable coalton:coalton)
 
-(cl:defmacro %with-file (path fn cl:&rest opts)
-  `(progn
-     (let prox = types:Proxy)
-     (let _ = (types:as-proxy-of ,fn prox))
-     (let ((declare proxy-fst (types:Proxy (:a -> :b) -> types:Proxy :a))
-           (proxy-fst (fn (_) types:Proxy))
-           (type (types:runtime-repr (types:proxy-inner (proxy-fst prox)))))
-       (util:lisp-result :result (,path ,fn type)
-         (cl:with-open-file (stream ,path :element-type '(cl:unsigned-byte 8) ,@opts)
-           (call-coalton-function ,fn (flex:make-flexi-stream stream :element-type type)))))))
+(cl:eval-when (:compile-toplevel :load-toplevel :execute)
+  (cl:defmacro %with-file (path fn cl:&rest opts)
+    `(progn
+       (let prox = types:Proxy)
+       (let _ = (types:as-proxy-of ,fn prox))
+       (let ((declare proxy-fst (types:Proxy (:a -> :b) -> types:Proxy :a))
+             (proxy-fst (fn (_) types:Proxy))
+             (type (types:runtime-repr (types:proxy-inner (proxy-fst prox)))))
+         (util:lisp-result :result (,path ,fn type)
+           (cl:with-open-file (stream ,path :element-type '(cl:unsigned-byte 8) ,@opts)
+             (call-coalton-function ,fn (flex:make-flexi-stream stream :element-type type))))))))
 
 (coalton-toplevel
   (declare with-input-file ((types:RuntimeRepr :elt) => String -> (stream:InputStream :elt -> :result) -> (Result LispCondition :result)))

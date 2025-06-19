@@ -30,4 +30,7 @@
     (whitespace? (:elt -> Boolean)))
 
   (define-instance (Whitespace Char)
-    (define (whitespace? obj) (list:member (char:char-code obj) whitespaces))))
+    (define (whitespace? obj) (list:member (char:char-code obj) whitespaces)))
+
+  (define-instance (Whitespace U8)
+    (define (whitespace? obj) (list:member (into obj) whitespaces))))
